@@ -1,36 +1,58 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Lumina
 
-## Getting Started
+Lumina is an online quiz app. Questions come from a bank in Supabase. A quiz is a random set that matches the category and difficulty you choose. The answer key stays on the server, and the score is calculated after you submit.
 
-First, run the development server:
+You can take quizzes without an account. Finished quizzes are saved in the browser. If you add Supabase, registration and account history turn on.
+
+## Local setup
+
+```bash
+npm install
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000).
+
+## Environment variables
+
+Copy `.env.example` to `.env.local`.
+
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `NEXT_PUBLIC_SUPABASE_URL` | Yes, to build quizzes | Supabase project URL. |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes, to build quizzes | Supabase anon key. |
+
+Restart `npm run dev` after changing `.env.local`.
+
+### Supabase
+
+1. Create a project at [supabase.com](https://supabase.com).
+2. In the SQL editor, run `supabase/schema.sql` for accounts and history.
+3. Run `supabase/question-bank.sql` to create and fill the 300-question bank.
+4. Add the project URL and anon key to `.env.local`.
+5. Restart the server.
+6. Use Register and Sign in if you want account history. Row Level Security limits each person to their own attempts.
+
+The bank is read through the `draw_questions` function. Each draw keeps the same category and difficulty and returns 5 or 10 random multiple-choice questions.
+
+## Scripts
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm run lint
+npx tsc --noEmit
+npx tsx scripts/test-quiz-logic.ts
+npm run build
+npm start
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Deploy
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+The app is a Next.js App Router project and can be deployed on Vercel or any Node host that runs `next build` and `next start`.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. Push the repository to your host. Do not commit `.env.local` or `.data/`.
+2. Set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` in the host's environment settings.
+3. Run `supabase/question-bank.sql` in the Supabase SQL editor before generating quizzes.
+4. Build with `npm run build` and start with `npm start`.
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Quiz answer keys for an attempt are stored in `.data/quiz-store.json` on the server disk. That file is local to one Node server. On a platform with a read-only or short-lived filesystem, a quiz can still be taken during the life of that server process, and a signed-in user's submitted results are also stored in Supabase. Guest history remains in the browser.
