@@ -9,6 +9,7 @@ export function SiteFooter() {
           <Link className="hover:text-foreground" href="/dashboard">Dashboard</Link>
           <Link className="hover:text-foreground" href="/generate">Generate</Link>
           <Link className="hover:text-foreground" href="/history">History</Link>
+          <Link className="hover:text-foreground" href="/admin">Questions</Link>
         </nav>
       </div>
     </footer>
