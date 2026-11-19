@@ -1,9 +1,18 @@
 import { jsonError } from "@/lib/http";
+import { responseForStoreError } from "@/lib/quiz/remote-store";
 import { scoreAttempt } from "@/lib/quiz/score";
 import { completeAttempt } from "@/lib/quiz/store";
 import { persistAttempt } from "@/lib/supabase/persist";
 
 export async function POST(request: Request) {
+  try {
+    return await submitQuiz(request);
+  } catch (error) {
+    return responseForStoreError(error) ?? jsonError("The quiz could not be submitted.", 500, "INTERNAL");
+  }
+}
+
+async function submitQuiz(request: Request) {
   let body: unknown;
   try {
     body = await request.json();

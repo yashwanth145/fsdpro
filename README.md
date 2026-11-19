@@ -55,4 +55,4 @@ The app is a Next.js App Router project and can be deployed on Vercel or any Nod
 3. Run `supabase/question-bank.sql` in the Supabase SQL editor before generating quizzes.
 4. Build with `npm run build` and start with `npm start`.
 
-Quiz answer keys for an attempt are stored in `.data/quiz-store.json` on the server disk. That file is local to one Node server. On a platform with a read-only or short-lived filesystem, a quiz can still be taken during the life of that server process, and a signed-in user's submitted results are also stored in Supabase. Guest history remains in the browser.
+On your own machine, answer keys for an in-progress quiz are stored in `.data/quiz-store.json`. Vercel cannot write that file, so a deployed app stores the same quiz in Supabase. Run `supabase/live-quizzes.sql` in the SQL editor after `supabase/question-bank.sql`. Guest history remains in the browser. A signed-in user's submitted results are also stored in Supabase.

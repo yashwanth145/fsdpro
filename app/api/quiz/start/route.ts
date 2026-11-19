@@ -1,9 +1,18 @@
 import { randomUUID } from "node:crypto";
 import { jsonError } from "@/lib/http";
+import { responseForStoreError } from "@/lib/quiz/remote-store";
 import { toPublicQuiz } from "@/lib/quiz/public";
 import { getQuiz, startAttempt } from "@/lib/quiz/store";
 
 export async function POST(request: Request) {
+  try {
+    return await startQuiz(request);
+  } catch (error) {
+    return responseForStoreError(error) ?? jsonError("The quiz could not be started.", 500, "INTERNAL");
+  }
+}
+
+async function startQuiz(request: Request) {
   let body: unknown;
   try {
     body = await request.json();

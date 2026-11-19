@@ -2,6 +2,13 @@ import "server-only";
 
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
+import {
+  getRemoteAttempt,
+  getRemoteQuiz,
+  saveRemoteAttempt,
+  saveRemoteQuiz,
+  usesRemoteQuizStore,
+} from "@/lib/quiz/remote-store";
 import type { QuizContent, QuizResult, StoredAttempt, StoredQuiz } from "@/lib/quiz/types";
 
 type Database = {
@@ -96,6 +103,10 @@ export async function saveGeneratedQuiz(
     createdAt: new Date().toISOString(),
     fallback,
   };
+  if (usesRemoteQuizStore()) {
+    await saveRemoteQuiz(quiz);
+    return quiz;
+  }
   await update((db) => {
     db.quizzes[quiz.id] = quiz;
   });
@@ -103,11 +114,23 @@ export async function saveGeneratedQuiz(
 }
 
 export async function getQuiz(id: string): Promise<StoredQuiz | null> {
+  if (usesRemoteQuizStore()) return getRemoteQuiz(id);
   const db = await readDb();
   return db.quizzes[id] ?? null;
 }
 
 export async function startAttempt(quizId: string, attemptId: string): Promise<StoredAttempt | null> {
+  if (usesRemoteQuizStore()) {
+    const quiz = await getRemoteQuiz(quizId);
+    if (!quiz) return null;
+    const attempt: StoredAttempt = {
+      id: attemptId,
+      quizId,
+      startedAt: new Date().toISOString(),
+    };
+    await saveRemoteAttempt(attempt);
+    return attempt;
+  }
   return update((db) => {
     const quiz = db.quizzes[quizId];
     if (!quiz) return null;
@@ -122,6 +145,7 @@ export async function startAttempt(quizId: string, attemptId: string): Promise<S
 }
 
 export async function getAttempt(id: string): Promise<StoredAttempt | null> {
+  if (usesRemoteQuizStore()) return getRemoteAttempt(id);
   const db = await readDb();
   return db.attempts[id] ?? null;
 }
@@ -133,6 +157,22 @@ export async function completeAttempt(
   | { quiz: StoredQuiz; result: QuizResult; alreadySubmitted: boolean }
   | { error: "missing" }
 > {
+  if (usesRemoteQuizStore()) {
+    const attempt = await getRemoteAttempt(attemptId);
+    if (!attempt) return { error: "missing" as const };
+    const quiz = await getRemoteQuiz(attempt.quizId);
+    if (!quiz) return { error: "missing" as const };
+    if (attempt.result) {
+      return { quiz, result: attempt.result, alreadySubmitted: true };
+    }
+    const result = buildResult(attempt, quiz);
+    await saveRemoteAttempt({
+      ...attempt,
+      submittedAt: result.submittedAt,
+      result,
+    });
+    return { quiz, result, alreadySubmitted: false };
+  }
   return update((db) => {
     const attempt = db.attempts[attemptId];
     if (!attempt) return { error: "missing" as const };

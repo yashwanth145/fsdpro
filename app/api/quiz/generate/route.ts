@@ -3,6 +3,7 @@ import { jsonError } from "@/lib/http";
 import { BankError, drawQuizFromBank } from "@/lib/quiz/bank";
 import { toPublicQuiz } from "@/lib/quiz/public";
 import { parseGenerateRequest } from "@/lib/quiz/schema";
+import { StoreError } from "@/lib/quiz/remote-store";
 import { saveGeneratedQuiz } from "@/lib/quiz/store";
 
 export async function POST(request: Request) {
@@ -30,11 +31,11 @@ export async function POST(request: Request) {
     );
     return Response.json({ quiz: toPublicQuiz(quiz) });
   } catch (error) {
-    if (error instanceof BankError) {
+    if (error instanceof BankError || error instanceof StoreError) {
       console.error("Quiz draw failed", error.code, error.status);
       return jsonError(error.message, error.status, error.code);
     }
-    console.error("Quiz draw failed", error instanceof Error ? error.name : "unknown");
+    console.error("Quiz draw failed", error instanceof Error ? error.message : "unknown");
     return jsonError("Something went wrong while building the quiz.", 500, "INTERNAL");
   }
 }
