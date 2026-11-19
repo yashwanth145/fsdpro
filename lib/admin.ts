@@ -81,6 +81,9 @@ function raiseRpc(error: { message?: string; code?: string }): never {
   if (/duplicate question/i.test(message)) {
     throw new AdminError("That question is already in this category and difficulty.", "DUPLICATE", 409);
   }
+  if (/question not found/i.test(message)) {
+    throw new AdminError("That question is no longer in the bank.", "NOT_FOUND", 404);
+  }
   if (/forbidden/i.test(message)) {
     throw new AdminError(
       "The admin token does not match the database. Use the same value in ADMIN_TOKEN and supabase/admin-questions.sql.",
@@ -149,6 +152,33 @@ export async function addBankQuestion(input: {
     throw new AdminError("The question was not saved.", "ADMIN_UNAVAILABLE", 503);
   }
   return id;
+}
+
+export async function updateBankQuestion(id: number, input: {
+  category: string;
+  difficulty: string;
+  questionText: string;
+  options: string[];
+  correctAnswer: string;
+  explanation: string;
+}): Promise<number> {
+  await requireAdmin();
+  const { data, error } = await supabase().rpc("admin_update_question", {
+    p_token: adminToken(),
+    p_id: id,
+    p_category: input.category,
+    p_difficulty: input.difficulty,
+    p_question: input.questionText,
+    p_options: input.options,
+    p_correct: input.correctAnswer,
+    p_explanation: input.explanation,
+  });
+  if (error) raiseRpc(error);
+  const savedId = Number((data as { id?: number } | null)?.id);
+  if (!Number.isFinite(savedId)) {
+    throw new AdminError("The question was not saved.", "ADMIN_UNAVAILABLE", 503);
+  }
+  return savedId;
 }
 
 export async function deleteBankQuestions(ids: number[]): Promise<number> {

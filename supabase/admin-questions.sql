@@ -114,6 +114,66 @@ exception
 end;
 $$;
 
+create or replace function public.admin_update_question(
+  p_token text,
+  p_id bigint,
+  p_category text,
+  p_difficulty text,
+  p_question text,
+  p_options jsonb,
+  p_correct text,
+  p_explanation text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  updated_id bigint;
+begin
+  if not public.admin_token_ok(p_token) then
+    raise exception 'forbidden';
+  end if;
+  if p_category not in ('Science', 'Mathematics', 'History', 'Geography', 'Literature', 'Technology', 'Biology', 'General Knowledge') then
+    raise exception 'invalid category';
+  end if;
+  if p_difficulty not in ('easy', 'medium', 'hard') then
+    raise exception 'invalid difficulty';
+  end if;
+  if jsonb_typeof(p_options) <> 'array' or jsonb_array_length(p_options) <> 4 then
+    raise exception 'invalid options';
+  end if;
+  if not exists (
+    select 1
+    from jsonb_array_elements_text(p_options) as choice(value)
+    where choice.value = p_correct
+  ) then
+    raise exception 'correct answer must match an option';
+  end if;
+
+  update public.question_bank
+  set
+    category = p_category,
+    difficulty = p_difficulty,
+    question_text = btrim(p_question),
+    options = p_options,
+    correct_answer = p_correct,
+    explanation = btrim(p_explanation)
+  where id = p_id
+  returning id into updated_id;
+
+  if updated_id is null then
+    raise exception 'question not found';
+  end if;
+
+  return jsonb_build_object('id', updated_id);
+exception
+  when unique_violation then
+    raise exception 'duplicate question';
+end;
+$$;
+
 create or replace function public.admin_delete_questions(p_token text, p_ids bigint[])
 returns integer
 language plpgsql
@@ -139,8 +199,10 @@ $$;
 revoke all on function public.admin_token_ok(text) from public;
 revoke all on function public.admin_list_questions(text, text, text) from public;
 revoke all on function public.admin_add_question(text, text, text, text, jsonb, text, text) from public;
+revoke all on function public.admin_update_question(text, bigint, text, text, text, jsonb, text, text) from public;
 revoke all on function public.admin_delete_questions(text, bigint[]) from public;
 
 grant execute on function public.admin_list_questions(text, text, text) to anon, authenticated;
 grant execute on function public.admin_add_question(text, text, text, text, jsonb, text, text) to anon, authenticated;
+grant execute on function public.admin_update_question(text, bigint, text, text, text, jsonb, text, text) to anon, authenticated;
 grant execute on function public.admin_delete_questions(text, bigint[]) to anon, authenticated;

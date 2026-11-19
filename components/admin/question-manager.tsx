@@ -35,6 +35,7 @@ export function AdminQuestions() {
   const [options, setOptions] = useState(["", "", "", ""]);
   const [correctAnswer, setCorrectAnswer] = useState("");
   const [explanation, setExplanation] = useState("");
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [newCategory, setNewCategory] = useState<string>(categories[0].name);
   const [newDifficulty, setNewDifficulty] = useState<(typeof difficulties)[number]>("easy");
   const [error, setError] = useState("");
@@ -146,16 +147,39 @@ export function AdminQuestions() {
     }
   }
 
-  async function addQuestion(event: React.FormEvent) {
+  function resetEditor() {
+    setEditingId(null);
+    setQuestionText("");
+    setOptions(["", "", "", ""]);
+    setCorrectAnswer("");
+    setExplanation("");
+  }
+
+  function beginEdit(question: BankQuestion) {
+    setEditingId(question.id);
+    setNewCategory(question.category);
+    setNewDifficulty(question.difficulty as (typeof difficulties)[number]);
+    setQuestionText(question.questionText);
+    const nextOptions = [...question.options, "", "", "", ""].slice(0, 4);
+    setOptions(nextOptions);
+    setCorrectAnswer(question.correctAnswer);
+    setExplanation(question.explanation);
+    setError("");
+    setNotice("");
+    document.getElementById("question-editor")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  async function saveQuestion(event: React.FormEvent) {
     event.preventDefault();
     setError("");
     setNotice("");
     setLoading(true);
     try {
       const response = await fetch("/api/admin/questions", {
-        method: "POST",
+        method: editingId ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          id: editingId ?? undefined,
           category: newCategory,
           difficulty: newDifficulty,
           questionText,
@@ -165,17 +189,15 @@ export function AdminQuestions() {
         }),
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error ?? "The question could not be added.");
-      setQuestionText("");
-      setOptions(["", "", "", ""]);
-      setCorrectAnswer("");
-      setExplanation("");
+      if (!response.ok) throw new Error(data.error ?? "The question could not be saved.");
+      const edited = editingId !== null;
+      resetEditor();
       setCategory(newCategory);
       setDifficulty(newDifficulty);
-      setNotice("Question added. You can select it below and delete it.");
+      setNotice(edited ? "Question updated." : "Question added. You can select it below and delete it.");
       await loadQuestions(newCategory, newDifficulty);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "The question could not be added.");
+      setError(caught instanceof Error ? caught.message : "The question could not be saved.");
     } finally {
       setLoading(false);
     }
@@ -218,13 +240,17 @@ export function AdminQuestions() {
         <Button variant="outline" onClick={() => void signOut()}>Sign out</Button>
       </div>
 
-      <Card>
+      <Card id="question-editor">
         <CardHeader>
-          <CardTitle>Add a question</CardTitle>
-          <CardDescription>New questions join the same bank and can be selected for deletion.</CardDescription>
+          <CardTitle>{editingId ? "Edit question" : "Add a question"}</CardTitle>
+          <CardDescription>
+            {editingId
+              ? "Change this question, then save. Cancel returns the form to adding a new one."
+              : "New questions join the same bank and can be edited or deleted."}
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <form className="space-y-4" onSubmit={(event) => void addQuestion(event)}>
+          <form className="space-y-4" onSubmit={(event) => void saveQuestion(event)}>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="new-category">Category</Label>
@@ -272,10 +298,17 @@ export function AdminQuestions() {
               <Label htmlFor="explanation">Explanation</Label>
               <Textarea id="explanation" value={explanation} onChange={(event) => setExplanation(event.target.value)} required />
             </div>
-            <Button type="submit" disabled={loading}>
-              {loading ? <Loader2 className="animate-spin" /> : null}
-              Add question
-            </Button>
+            <div className="flex flex-wrap gap-3">
+              <Button type="submit" disabled={loading}>
+                {loading ? <Loader2 className="animate-spin" /> : null}
+                {editingId ? "Save changes" : "Add question"}
+              </Button>
+              {editingId ? (
+                <Button type="button" variant="outline" disabled={loading} onClick={resetEditor}>
+                  Cancel
+                </Button>
+              ) : null}
+            </div>
           </form>
         </CardContent>
       </Card>
@@ -283,7 +316,7 @@ export function AdminQuestions() {
       <Card>
         <CardHeader>
           <CardTitle>Choose questions to delete</CardTitle>
-          <CardDescription>Filter the bank, select the rows you want gone, then delete them.</CardDescription>
+          <CardDescription>Filter the bank, edit a question, or select rows and delete them.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <form className="grid gap-4 sm:grid-cols-[1fr_1fr_auto]" onSubmit={(event) => void applyFilters(event)}>
@@ -326,19 +359,24 @@ export function AdminQuestions() {
           <ul className="space-y-3">
             {questions.map((question) => (
               <li key={question.id} className="rounded-xl border border-border p-4">
-                <label className="flex items-start gap-3">
-                  <input
-                    className="mt-1"
-                    type="checkbox"
-                    checked={selected.includes(question.id)}
-                    onChange={() => toggle(question.id)}
-                  />
-                  <span>
-                    <span className="text-sm text-muted-foreground">{question.category} · {question.difficulty}</span>
-                    <span className="mt-1 block font-medium">{question.questionText}</span>
-                    <span className="mt-2 block text-sm text-muted-foreground">Correct answer: {question.correctAnswer}</span>
-                  </span>
-                </label>
+                <div className="flex items-start justify-between gap-3">
+                  <label className="flex items-start gap-3">
+                    <input
+                      className="mt-1"
+                      type="checkbox"
+                      checked={selected.includes(question.id)}
+                      onChange={() => toggle(question.id)}
+                    />
+                    <span>
+                      <span className="text-sm text-muted-foreground">{question.category} · {question.difficulty}</span>
+                      <span className="mt-1 block font-medium">{question.questionText}</span>
+                      <span className="mt-2 block text-sm text-muted-foreground">Correct answer: {question.correctAnswer}</span>
+                    </span>
+                  </label>
+                  <Button type="button" variant="outline" size="sm" onClick={() => beginEdit(question)}>
+                    Edit
+                  </Button>
+                </div>
               </li>
             ))}
           </ul>

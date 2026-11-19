@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { addBankQuestion, AdminError, deleteBankQuestions, listBankQuestions } from "@/lib/admin";
+import { addBankQuestion, AdminError, deleteBankQuestions, listBankQuestions, updateBankQuestion } from "@/lib/admin";
 import { categories } from "@/lib/categories";
 import { jsonError } from "@/lib/http";
 import { difficulties } from "@/lib/quiz/types";
@@ -7,6 +7,7 @@ import { difficulties } from "@/lib/quiz/types";
 const categoryNames = categories.map((category) => category.name) as [string, ...string[]];
 
 const questionSchema = z.object({
+  id: z.number().int().positive().optional(),
   category: z.enum(categoryNames),
   difficulty: z.enum(difficulties),
   questionText: z.string().trim().min(8, "Write a question with at least 8 characters.").max(400),
@@ -39,27 +40,47 @@ export async function GET(request: Request) {
   }
 }
 
-export async function POST(request: Request) {
+async function readQuestion(request: Request) {
   let body: unknown;
   try {
     body = await request.json();
   } catch {
-    return jsonError("Send the question as JSON.", 400, "INVALID_JSON");
+    return { error: jsonError("Send the question as JSON.", 400, "INVALID_JSON") };
   }
   const parsed = questionSchema.safeParse(body);
   if (!parsed.success) {
-    return jsonError(parsed.error.issues[0]?.message ?? "Check the new question.", 400, "INVALID_INPUT");
+    return { error: jsonError(parsed.error.issues[0]?.message ?? "Check the question.", 400, "INVALID_INPUT") };
   }
   const options = parsed.data.options;
   if (new Set(options).size !== 4) {
-    return jsonError("Each answer choice must be different.", 400, "INVALID_INPUT");
+    return { error: jsonError("Each answer choice must be different.", 400, "INVALID_INPUT") };
   }
   if (!options.includes(parsed.data.correctAnswer)) {
-    return jsonError("The correct answer must match one of the four choices.", 400, "INVALID_INPUT");
+    return { error: jsonError("The correct answer must match one of the four choices.", 400, "INVALID_INPUT") };
   }
+  return { data: parsed.data };
+}
+
+export async function POST(request: Request) {
+  const parsed = await readQuestion(request);
+  if ("error" in parsed) return parsed.error;
   try {
     const id = await addBankQuestion(parsed.data);
     return Response.json({ id }, { status: 201 });
+  } catch (error) {
+    return adminFailure(error);
+  }
+}
+
+export async function PATCH(request: Request) {
+  const parsed = await readQuestion(request);
+  if ("error" in parsed) return parsed.error;
+  if (!parsed.data.id) {
+    return jsonError("Choose a question to edit.", 400, "INVALID_INPUT");
+  }
+  try {
+    const id = await updateBankQuestion(parsed.data.id, parsed.data);
+    return Response.json({ id });
   } catch (error) {
     return adminFailure(error);
   }
